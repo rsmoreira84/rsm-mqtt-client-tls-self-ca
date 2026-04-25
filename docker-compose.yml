@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq-broker
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Management UI
+      - "1883:1883"    # MQTT plugin 
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    command: >
+      bash -c "rabbitmq-plugins enable --offline rabbitmq_mqtt && rabbitmq-server"
+    restart: unless-stopped
