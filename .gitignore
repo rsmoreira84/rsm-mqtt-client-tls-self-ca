@@ -1,0 +1,37 @@
+# ACM MQTT Connection Simulations - .gitignore
+
+# Never commit private keys or sensitive provisioning files
+provisioning-keys/
+*/provisioning-keys/
+
+# Exclude all connection-params.json except for local-broker
+*/connection-params.json
+!local-broker/connection-params.json
+
+# Exclude credential-params.json (runtime file, auto-created from example)
+*/credential-params.json
+
+# Exclude PEM keys and base64 public key files in all broker folders
+*.pem
+*.der
+*.sig
+*.tmp
+public_key_base64.txt
+
+# Allow CA bundle for public brokers only (company-internal CA bundles must not be committed)
+!acm-dev-butterfly-broker/truststore/ca-bundle.pem
+
+# Python virtual environments
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VSCode settings
+.vscode/
+
+# OS/Editor files
+.DS_Store
+Thumbs.db
