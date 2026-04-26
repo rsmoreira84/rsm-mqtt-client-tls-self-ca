@@ -1,0 +1,22 @@
+# Example RabbitMQ 3.13+ (sysctl-style) config for MQTTS with a custom chain.
+# Copy to your deployment and adjust mount paths. Do not commit real keys.
+#
+# Reference: https://www.rabbitmq.com/ssl.html
+#
+# In Docker, place cert/key under e.g. /etc/rabbitmq/tls/ and mount read-only:
+#   - broker-chain.pem  (server cert + intermediate; leaf first)
+#   - rabbitmq-server.key
+
+# Plain AMQP (optional in lab — comment out or set if you do not use non-TLS)
+# listeners.tcp.default = 5672
+
+# TLS listener for MQTT/AMQPS; pick a port (8883 is conventional for MQTTS)
+listeners.ssl.default = 8883
+
+ssl_options.certfile   = /etc/rabbitmq/tls/broker-chain.pem
+ssl_options.keyfile    = /etc/rabbitmq/tls/rabbitmq-server.key
+# one-way server auth: do not require client certificates on this listener
+ssl_options.verify     = verify_none
+
+# If you also run non-TLS MQTT on 1883, keep a separate listener block or
+# the default 1883 mapping from your current docker-compose; MQTTS is on 8883.

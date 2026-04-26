@@ -35,3 +35,9 @@ __pycache__/
 # OS/Editor files
 .DS_Store
 Thumbs.db
+
+# Local PKI outputs (scripts + .cnf under local-broker/pki/ are committed)
+local-broker/pki/private/
+local-broker/pki/csr/
+local-broker/pki/certs/
+local-broker/truststore/

@@ -48,7 +48,7 @@ Fields include:
 
 ### `truststore/` (optional)
 
-- `ca-bundle.pem` when TLS verification is enabled and `tls_ca_bundle` points at it.
+- `ca-bundle.pem` when TLS verification is enabled and `tls_ca_bundle` points at it. In this repo, PKI step **`06`** populates it with the **root CA** cert so OpenSSL/Python can verify MQTTS (not an intermediate-only PEM).
 
 ---
 
@@ -113,6 +113,7 @@ The current `mqtt_client.py` does **not** auto-refresh `client_id` on each run.
 
 | Version | Date       | Changes |
 |---------|------------|---------|
+| 1.3     | 2026-04-26 | `truststore/` note: `ca-bundle.pem` is the root CA from PKI step 06 (Python/OpenSSL PKIX). |
 | 1.2     | 2026-04-24 | Local-only scope; removed provisioning script and device signing/nonce workflow from instructions; aligned with current `mqtt_client.py`. |
 | 1.1     | 2026-04-23 | Prior split-config + provisioning model. |
 | 1.0     | 2026-04-16 | Initial version. |

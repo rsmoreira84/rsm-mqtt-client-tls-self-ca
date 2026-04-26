@@ -1,0 +1,14 @@
+# OpenSSL: CSR for intermediate CA (used by 02-create-intermediate-ca.sh)
+
+[req]
+distinguished_name = req_dn
+prompt             = no
+utf8               = yes
+
+[req_dn]
+C  = US
+ST = Local
+L  = Local
+O  = Local Development
+OU = Lab Issuing CA
+CN = Local Dev Issuing CA

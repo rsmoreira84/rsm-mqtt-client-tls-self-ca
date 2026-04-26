@@ -1,0 +1,8 @@
+# OpenSSL: v3 extensions when the ROOT CA signs the intermediate (used by 02-create-intermediate-ca.sh)
+
+[v3_intermediate]
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always,issuer:always
+# Intermediate can issue end-entity (server) certs, not sub-CAs
+basicConstraints       = critical,CA:TRUE,pathlen:0
+keyUsage               = critical,digitalSignature,cRLSign,keyCertSign

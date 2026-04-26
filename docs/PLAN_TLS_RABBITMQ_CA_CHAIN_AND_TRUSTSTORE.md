@@ -1,6 +1,6 @@
 # Plan: TLS for local RabbitMQ (CA hierarchy, chain, client truststore)
 
-Development plan for running RabbitMQ in Docker with **MQTTS** using certificates issued under a **custom CA hierarchy** (root → intermediate → server leaf), with the Python MQTT client **verifying the server certificate** via a **`ca-bundle.pem`** truststore—aligned with common enterprise practice (operational trust on **intermediates**, root often tightly controlled).
+Development plan for running RabbitMQ in Docker with **MQTTS** using certificates issued under a **custom CA hierarchy** (root → intermediate → server leaf), with the Python MQTT client **verifying the server certificate** via a **`ca-bundle.pem`** that includes the **root CA** (see §9.1). The **intermediate** still performs day-to-day signing; the plan’s “policy A” label refers to that issuance split, not to intermediate-only client PEMs.
 
 This document is a **plan only**; implementation happens after review and approval.
 
@@ -8,13 +8,13 @@ This document is a **plan only**; implementation happens after review and approv
 
 ## 1. Goals and success criteria
 
-**Goal:** Run RabbitMQ in Docker with **MQTTS** (e.g. port **8883**), using a **server certificate** issued under **your CA hierarchy** (root → intermediate → server leaf). The Python client must **verify the server certificate** during TLS using a **`ca-bundle.pem`** that reflects how your company thinks about trust (typically **intermediate-focused**, root optional on the client depending on policy).
+**Goal:** Run RabbitMQ in Docker with **MQTTS** (e.g. port **8883**), using a **server certificate** issued under **your CA hierarchy** (root → intermediate → server leaf). The Python client must **verify the server certificate** during TLS using a **`ca-bundle.pem`**.
 
 **Done when:**
 
 - TLS handshake completes with **verification enabled** (`tls_cert_verification_enabled: true`).
 - The server presents a **correct chain** (leaf + intermediate(s) as required).
-- The client truststore contains only what policy allows (often **intermediate(s)** as trust anchor, sometimes + root for local parity).
+- The client truststore is sufficient for the **verifier in use** (this repo: **root CA in `ca-bundle.pem`** for OpenSSL 3 / Python PKIX; see §9.1).
 - Private keys and signing keys are **not committed**; layout and docs are clear.
 
 ---
@@ -31,12 +31,10 @@ For **local simulation**, we still **create** a root and intermediate (otherwise
 
 | Policy flavor | What RabbitMQ sends (chain file / config) | What client `ca-bundle.pem` contains |
 |---------------|--------------------------------------------|--------------------------------------|
-| **A. Intermediate as trust anchor** (common when root isn't shipped) | Leaf + **intermediate** (intermediate signs leaf) | **Intermediate CA cert** (and optionally extra intermediates if you had a ladder) |
-| **B. Full chain validation to root** (simpler mentally, less like "no root shared") | Leaf + intermediate(s) | **Root + intermediate(s)** |
+| **A. Intermediate as operational anchor** (intermediate issues leaves; root may stay offline) | Leaf + **intermediate** (intermediate signs leaf) | *Idealized:* intermediate only — **does not** work with stock **Python + OpenSSL** path validation for this hierarchy (fails: *unable to get issuer certificate*). |
+| **B. PKIX to root in the client file** (this repo) | Leaf + intermediate(s) | **Root CA** — server chain completes validation (same pattern as trusting a public CA root). |
 
-**Recommendation for strong security *and* company-like behavior:** implement **A** as the primary path: client trusts the **intermediate**; server sends **leaf + intermediate**; root exists only on the **CA signing workstation / vault simulation**, not in the repo or client image unless you explicitly want parity with a specific team's bundle.
-
-We can still generate a root locally to **sign the intermediate**; we simply **don't deploy** the root to the client if policy says so.
+**Operational “policy A” in this project** still means: the **intermediate** signs the server cert; the **root** only signs the intermediate. **Client** `ca-bundle.pem` follows row **B**: copy of **`root-ca.crt`**, so `mqtt_client.py` can verify the broker’s **leaf + intermediate** chain. A future corporate deployment might install the root in a **system** store instead of this file, but the anchor is still the root for PKIX.
 
 ---
 
@@ -85,7 +83,7 @@ Proposed directories (exact names TBD at implementation):
    - `tls_cert_verification_enabled`: **true**
    - `tls_ca_bundle`: path relative to `local-broker/`, e.g. `truststore/ca-bundle.pem`
 2. Confirm **hostname in SAN** matches **`host`** (e.g. `localhost` in SAN if `host` is `localhost`).
-3. Validate: verification **on** succeeds; wrong/missing intermediate in bundle **fails** (proves real validation).
+3. Validate: verification **on** succeeds; wrong or missing **root** in the bundle (or a wrong chain on the server) **fails** (proves real validation).
 
 ---
 
@@ -103,7 +101,7 @@ Implement scripts **after** this plan is approved and policy choices are fixed.
 
 - **No private keys in git**; `.gitignore` + optional secret scanning.
 - **Least privilege:** CA keys only where issuance happens; RabbitMQ gets **only** server key + chain.
-- **Separate concerns:** root key not copied into client/runtime unless policy **B** requires it for local parity.
+- **Separate concerns:** root *private key* never on clients; root *certificate* is in the client `ca-bundle.pem` here so the TLS stack can verify the chain (or use a system-wide trust store in production).
 - **Rotation:** document re-issue and RabbitMQ reload.
 - **Audit:** committed `README-pki.md` (optional) describing **roles** of each PEM—**no** key material.
 
@@ -111,22 +109,31 @@ Implement scripts **after** this plan is approved and policy choices are fixed.
 
 ## 9. Execution phases (when approved)
 
-1. **Confirm policy A vs B** for `ca-bundle.pem`.
+1. **Align client bundle with the TLS verifier** — this repo uses **root in `ca-bundle.pem`** (see §9.1); issuance model remains intermediate-signs-leaf.
 2. **Define SANs and `host`** for Docker (`localhost` vs hostname).
 3. **Generate PKI** (manual or script) into gitignored tree.
 4. **Configure RabbitMQ** for MQTTS + chain; verify with `openssl s_client`.
 5. **Place `truststore/ca-bundle.pem`** under `local-broker/` (or symlink from `pki/`) and add TLS `host-params`.
 6. **Run `mqtt_client.py`** with verification on; adjust tests if new helpers are added.
 
+### 9.1 Client truststore and issuance model
+
+**Issuance (policy A):** the **intermediate** issues the server (and other) leaf certificates; the **root** only issues the intermediate. That keeps day-to-day signing on the intermediate key, as in many enterprises.
+
+**Client `ca-bundle.pem` (required for this Python client):** contains the **root CA** certificate (written by `06-assemble-chain-and-truststore.sh` from `root-ca.crt`). **Reason:** the broker presents **leaf + intermediate**; OpenSSL 3 and Python build a path to a trust anchor. An **intermediate-only** PEM in `tls_set` / `load_verify_locations` does **not** complete PKIX validation to an anchor in this setup and yields **`[SSL: CERTIFICATE_VERIFY_FAILED] ... unable to get issuer certificate`**. The root in the file is the standard fix; operationally, that root could instead live in a **system trust store** in production. Details: [PKI_TLS_POLICY_A_RABBITMQ.md](./PKI_TLS_POLICY_A_RABBITMQ.md).
+
 ---
 
 ## 10. Open decisions (fill in before implementation)
 
-- **Trust anchor:** client bundle = **intermediate only**, or **intermediate + root**?
-- **Hostname:** client connects to **`localhost`**, **`127.0.0.1`**, or **Docker DNS name**? (SANs must match.)
-- **TLS policy:** minimum version (e.g. TLS 1.2+), cipher preferences?
-- **RSA vs EC:** internal standard?
+| Topic | Status | Recorded choice / note |
+|-------|--------|------------------------|
+| **Client `ca-bundle.pem`** | **Decided** | **Root CA** — see §9.1; **issuance** still intermediate-signs-leaf. |
+| **Hostname / SAN** | **Decided (lab default)** | **DNS `localhost`** in `local-broker/pki/config/server-req.cnf`; `host` in JSON = **`localhost`**. Revisit if clients use IP or other names. |
+| **RSA vs EC (internal standard)** | **Decided (lab scripts)** | **ECDSA P-256** in provided scripts. |
+| **TLS policy** (min version, ciphers) | **Open** | Set in RabbitMQ and OS TLS stacks when you harden; not fixed in the shell scripts. |
+| **Plain MQTT 1883 vs MQTTS only** | **Open** | docker-compose can expose both during migration. |
 
 ---
 
-*Last updated: plan drafted for review; execution pending stakeholder approval.*
+*Last updated: 2026-04-26 — client bundle = root CA for Python/OpenSSL; PKI runbook [PKI_TLS_POLICY_A_RABBITMQ.md](./PKI_TLS_POLICY_A_RABBITMQ.md).*

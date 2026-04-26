@@ -1,0 +1,30 @@
+# OpenSSL: server leaf CSR and signed cert extensions (used by 04/05)
+# Policy A: client trust store holds the INTERMEDIATE cert; SAN must include the name
+# you use in MQTT host (see docs/PKI_TLS_POLICY_A_RABBITMQ.md). Default: DNS:localhost
+
+[req]
+distinguished_name = req_dn
+req_extensions     = v3_server
+prompt             = no
+utf8               = yes
+
+[req_dn]
+# Defaults; CN helps humans; verifiers use SAN (v3_server)
+C  = US
+ST = Local
+L  = Local
+O  = Local Development
+OU = Lab
+CN = localhost
+
+[v3_server]
+basicConstraints     = critical,CA:FALSE
+# ECDSA server leaf: standard TLS uses digitalSignature; keyEncipherment left for
+# compatibility with some TLS stacks; adjust if your policy forbids it.
+keyUsage             = digitalSignature, keyEncipherment
+extendedKeyUsage     = serverAuth
+subjectAltName       = @alt_names
+
+[alt_names]
+# Required for modern TLS when connecting to "localhost" (user decision: this list only)
+DNS.1 = localhost

@@ -1,0 +1,24 @@
+# OpenSSL: self-signed root CA certificate (used by 01-create-root-ca.sh)
+# ECDSA P-256; v3 flags match section 2 "Policy A" (pathlen=1: may issue intermediate CAs)
+
+[req]
+distinguished_name = req_dn
+x509_extensions    = v3_root
+prompt             = no
+utf8               = yes
+
+[req_dn]
+# Defaults for a local / lab root CA. Adjust only if you need different identity strings.
+C  = US
+ST = Local
+L  = Local
+O  = Local Development
+OU = Lab Root CA
+CN = Local Dev Root CA
+
+[v3_root]
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always,issuer:always
+# Root may issue at most one level of subordinate (the intermediate)
+basicConstraints       = critical,CA:TRUE,pathlen:1
+keyUsage               = critical,digitalSignature,cRLSign,keyCertSign

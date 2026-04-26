@@ -1,16 +1,56 @@
-version: '3.8'
-services:
+# Two independent RabbitMQ nodes: clear MQTT (1883) and MQTTS (8883), each with
+# the management UI (rabbitmq:3.13-management): host ports 15672 and 15673 map
+# to each container’s management HTTP listener (15672 inside the container).
+# Core AMQP is still disabled (listeners.tcp = none); only MQTT + management are exposed.
+#
+# MQTTS requires PKI: run local-broker/pki/scripts/01-… through 06, then
+#   docker compose up -d
+#
+# If broker-chain.pem or rabbitmq-server.key is missing, start only the plain node:
+#   docker compose up -d rabbitmq-mqtt-plain
 
-  rabbitmq:
+version: "3.8"
+services:
+  rabbitmq-mqtt-plain:
     image: rabbitmq:3.13-management
-    container_name: rabbitmq-broker
+    container_name: rabbitmq-mqtt-plain
     ports:
-      - "5672:5672"    # AMQP
-      - "15672:15672"  # Management UI
-      - "1883:1883"    # MQTT plugin 
+      - "1883:1883"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - ./docker/rabbitmq/mqtt-plain.conf:/etc/rabbitmq/rabbitmq.conf:ro
     command: >
-      bash -c "rabbitmq-plugins enable --offline rabbitmq_mqtt && rabbitmq-server"
+      bash -c "rabbitmq-plugins enable --offline rabbitmq_mqtt rabbitmq_management && exec rabbitmq-server"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 25s
+
+  rabbitmq-mqtt-tls:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq-mqtt-tls
+    ports:
+      - "8883:8883"
+      - "15673:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - ./docker/rabbitmq/mqtt-tls.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./local-broker/pki/certs/broker-chain.pem:/etc/rabbitmq/tls/broker-chain.pem:ro
+      - ./local-broker/pki/private/rabbitmq-server.key:/etc/rabbitmq/tls/rabbitmq-server.key:ro
+    command: >
+      bash -c "rabbitmq-plugins enable --offline rabbitmq_mqtt rabbitmq_management && exec rabbitmq-server"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 25s

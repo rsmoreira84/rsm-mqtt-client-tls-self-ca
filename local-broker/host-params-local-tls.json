@@ -1,0 +1,7 @@
+{
+    "protocol": "mqtts://",
+    "host": "localhost",
+    "port": 8883,
+    "tls_cert_verification_enabled": true,
+    "tls_ca_bundle": "truststore/ca-bundle.pem"
+}
